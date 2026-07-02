@@ -20,6 +20,15 @@ Mở file `index.html` bằng trình duyệt là xong. Hoặc deploy lên GitHub
 - Thêm thẻ thủ công (có nút "Lưu & thêm tiếp" để nhập nhanh)
 - **Nhập hàng loạt**: dán danh sách từ Excel/Google Sheets hoặc file text, mỗi dòng một thẻ, ngăn cách bằng Tab, ` - `, `,` hoặc `;`
 
+### 📖 Tạo bộ thẻ từ tài liệu (PDF/TXT)
+Upload sách từ vựng (VD: *600 Essential Words for the TOEIC*) — app sẽ:
+1. Đọc file PDF (bằng pdf.js, ngay trên trình duyệt) hoặc TXT
+2. **Tách theo chương**: nhận diện tiêu đề `Chapter / Unit / Lesson / Week / Part / Day / Chương / Bài` + số
+3. **Lọc từ vựng** trong mỗi chương theo 2 chế độ:
+   - *Dòng từ vựng có nghĩa*: nhận diện các dòng dạng `từ — nghĩa`, `từ: nghĩa`, `từ (n.) nghĩa`...
+   - *Tự động*: lọc từ tiếng Anh theo tần suất (bỏ từ phổ thông), nghĩa tự điền sau
+4. Xem trước từng chương, bỏ tick chương không cần → **tạo mỗi chương một bộ thẻ riêng**
+
 ### 📚 Ba chế độ học
 | Chế độ | Mô tả |
 |---|---|

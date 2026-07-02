@@ -218,6 +218,32 @@
   @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
   .back-link { color: var(--text-dim); cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; gap: 5px; margin-bottom: 14px; background: none; border: none; font-family: inherit; }
   .back-link:hover { color: var(--text); }
+
+  /* ===== Document import ===== */
+  .drop-zone {
+    border: 2px dashed var(--border); border-radius: var(--radius);
+    padding: 46px 20px; text-align: center; color: var(--text-dim);
+    cursor: pointer; transition: border-color .15s, background .15s; margin-top: 18px;
+  }
+  .drop-zone:hover, .drop-zone.dragover { border-color: var(--primary); background: rgba(76,110,245,.06); }
+  .drop-zone .icon { font-size: 40px; margin-bottom: 10px; }
+  .chapter-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px; margin-bottom: 10px;
+  }
+  .chapter-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .chapter-head input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--primary); cursor: pointer; }
+  .chapter-head .title { font-weight: 700; flex: 1; min-width: 150px; }
+  .chapter-head .count { font-size: 13px; color: var(--text-dim); white-space: nowrap; }
+  .chapter-preview { font-size: 13px; color: var(--text-dim); margin-top: 8px; line-height: 1.6; word-break: break-word; }
+  .import-options { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; margin: 18px 0; }
+  .import-options .field { flex: 1; min-width: 200px; }
+  .spinner {
+    display: inline-block; width: 18px; height: 18px;
+    border: 3px solid var(--border); border-top-color: var(--primary);
+    border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -324,6 +350,7 @@ function render() {
     case 'study': renderStudy(); break;
     case 'quiz':  renderQuiz(); break;
     case 'write': renderWrite(); break;
+    case 'docimport': renderDocImport(); break;
   }
 }
 
@@ -333,6 +360,7 @@ function renderHome() {
     <h1>Bộ thẻ của bạn</h1>
     <p class="subtitle">Tạo bộ thẻ, nhập từ vựng và bắt đầu học — giống Quizlet, dữ liệu lưu ngay trên trình duyệt.</p>
     <button class="btn primary big" onclick="openDeckModal()">＋ Tạo bộ thẻ mới</button>
+    <button class="btn big" onclick="go('docimport')" style="margin-left:8px">📖 Tạo từ tài liệu (PDF/TXT)</button>
   `;
   if (decks.length === 0) {
     html += `<div class="empty-state"><div class="icon">🗂️</div>Chưa có bộ thẻ nào.<br>Bấm "Tạo bộ thẻ mới" để bắt đầu!</div>`;
@@ -842,6 +870,285 @@ function renderWriteDone() {
       </div>
     </div>
   `;
+}
+
+/* ================= Import from document (PDF/TXT) ================= */
+/* Upload sách từ vựng (VD: 500/600 Essential Words for the TOEIC),
+   tách theo chương và tạo mỗi chương một bộ thẻ riêng. */
+
+const PDFJS_VER = '3.11.174';
+let pdfjsLoading = null;
+
+function loadPdfJs() {
+  if (window.pdfjsLib) return Promise.resolve();
+  if (pdfjsLoading) return pdfjsLoading;
+  pdfjsLoading = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' + PDFJS_VER + '/pdf.min.js';
+    s.onload = () => {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' + PDFJS_VER + '/pdf.worker.min.js';
+      resolve();
+    };
+    s.onerror = () => { pdfjsLoading = null; reject(new Error('Không tải được thư viện đọc PDF (cần mạng)')); };
+    document.head.appendChild(s);
+  });
+  return pdfjsLoading;
+}
+
+async function extractPdfText(file) {
+  await loadPdfJs();
+  const buf = await file.arrayBuffer();
+  const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+  let text = '';
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const tc = await page.getTextContent();
+    /* ghép item theo toạ độ y để khôi phục từng dòng */
+    let lastY = null, line = '';
+    for (const item of tc.items) {
+      const y = item.transform[5];
+      if (lastY !== null && Math.abs(y - lastY) > 2) {
+        text += line.trim() + '\n';
+        line = '';
+      }
+      line += item.str + ' ';
+      lastY = y;
+    }
+    text += line.trim() + '\n';
+    const st = document.getElementById('doc-status');
+    if (st) st.textContent = `Đang đọc PDF... trang ${p}/${pdf.numPages}`;
+  }
+  return text;
+}
+
+/* Nhận diện tiêu đề chương: Chapter/Unit/Lesson/Week/Part 1, Chương 1, Bài 1, Lesson I... */
+const CHAPTER_RE = /^\s*(?:chapter|unit|lesson|week|part|section|day|chương|bài|chủ đề)\s*\.?\s*(\d{1,3}|[IVXLC]{1,7})\b[\s.:\-–—]*(.{0,60})$/i;
+
+function splitChapters(text) {
+  const lines = text.split(/\r?\n/);
+  const chapters = [];
+  let current = { title: 'Phần mở đầu', lines: [] };
+  for (const line of lines) {
+    const t = line.trim();
+    const m = t.match(CHAPTER_RE);
+    if (m && t.length <= 80) {
+      chapters.push(current);
+      current = { title: t.replace(/\s+/g, ' ').slice(0, 60), lines: [] };
+    } else {
+      current.lines.push(line);
+    }
+  }
+  chapters.push(current);
+  return chapters;
+}
+
+/* --- Lọc dòng dạng "từ vựng — nghĩa/định nghĩa" --- */
+function isEnglishTerm(s) {
+  return /^[A-Za-z][A-Za-z' -]{0,45}$/.test(s) && s.trim().split(/\s+/).length <= 5;
+}
+
+function parseVocabLine(line) {
+  /* 1) Ngăn cách rõ ràng: Tab, " - ", ": ", "; " */
+  const seps = ['\t', ' - ', ' – ', ' — ', ': ', '; '];
+  for (const sep of seps) {
+    const idx = line.indexOf(sep);
+    if (idx > 0) {
+      const term = line.slice(0, idx).trim();
+      const def = line.slice(idx + sep.length).trim();
+      if (isEnglishTerm(term) && def.length >= 2 && def.length <= 200) return { term, def };
+    }
+  }
+  /* 2) Từ loại: "abide by v. to comply with", "prohibit (v) cấm".
+     Yêu cầu có dấu chấm hoặc ngoặc quanh từ loại để không bắt nhầm câu văn thường. */
+  const m = line.match(/^([A-Za-z][A-Za-z' -]{0,45}?)\s+(?:\((n|v|adj|adv|prep|conj|phr|idiom|pron)\.?\)|(n|v|adj|adv|prep|conj|phr|idiom|pron)\.)\s+(.{2,180})$/i);
+  if (m && isEnglishTerm(m[1].trim())) {
+    const pos = (m[2] || m[3]).toLowerCase();
+    return { term: m[1].trim(), def: '(' + pos + '.) ' + m[4].trim() };
+  }
+  return null;
+}
+
+function extractVocabEntries(lines) {
+  const entries = [];
+  const seen = new Set();
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line || line.length > 220) continue;
+    const e = parseVocabLine(line);
+    if (e) {
+      const key = e.term.toLowerCase();
+      if (!seen.has(key)) { seen.add(key); entries.push(e); }
+    }
+  }
+  return entries;
+}
+
+/* --- Chế độ tự động: lọc từ tiếng Anh theo tần suất, bỏ từ phổ thông --- */
+const STOPWORDS = new Set(('the a an and or but if then else when at by for in of on to up with as is are was were be been being do does did done have has had having i you he she it we they me him her us them his its our your their mine this that these those there here not no nor yes can could will would should shall may might must from into onto over under above below out off again further once more most other some any such only own same s t don didn doesn isn aren wasn weren very just also now new one two three four five six seven eight nine ten first second third about after before between during without within while where which who whom whose what why how all both each few many much still even back well get got make made take took go went come came see saw know knew think thought say said want look use used need find give work call try ask feel seem leave put mean keep let begin help talk turn start show hear play run move like live believe hold bring happen write sit stand lose pay meet include continue set learn change lead understand watch follow stop create speak read spend grow open walk win offer remember love consider appear buy wait serve die send expect build stay fall cut reach kill remain').split(' '));
+
+function autoExtractWords(lines, limit) {
+  const freq = new Map();
+  for (const line of lines) {
+    const words = line.toLowerCase().match(/[a-z][a-z'-]{3,}/g) || [];
+    for (const w of words) {
+      if (STOPWORDS.has(w.replace(/['-]/g, ''))) continue;
+      freq.set(w, (freq.get(w) || 0) + 1);
+    }
+  }
+  return [...freq.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([w]) => ({ term: w, def: '' }));
+}
+
+/* --- View nhập tài liệu --- */
+let docImport = null; /* { fileName, chapters: [{title, entries, auto, include}] } */
+
+function renderDocImport() {
+  if (!docImport) {
+    app.innerHTML = `
+      <button class="back-link" onclick="docImport=null; go('home')">← Trang chủ</button>
+      <h1>📖 Tạo bộ thẻ từ tài liệu</h1>
+      <p class="subtitle">Upload sách/tài liệu từ vựng (VD: "600 Essential Words for the TOEIC").
+      App sẽ tách theo <b>chương</b> (Chapter, Unit, Lesson, Chương, Bài...), lọc từ vựng trong mỗi chương
+      và tạo <b>mỗi chương một bộ thẻ riêng</b>.</p>
+      <div class="import-options">
+        <div class="field">
+          <label>Cách lọc từ vựng</label>
+          <select id="doc-mode">
+            <option value="lines">Dòng từ vựng có nghĩa kèm theo (từ — nghĩa, từ (n.) nghĩa...)</option>
+            <option value="auto">Tự động lọc từ tiếng Anh (nghĩa tự điền sau)</option>
+          </select>
+        </div>
+        <div class="field" style="max-width:170px">
+          <label>Tối đa từ / chương (chế độ tự động)</label>
+          <input type="text" id="doc-limit" value="50">
+        </div>
+      </div>
+      <div class="drop-zone" id="drop-zone" onclick="document.getElementById('doc-file').click()">
+        <div class="icon">📄</div>
+        <div><b>Bấm để chọn file</b> hoặc kéo thả vào đây</div>
+        <div style="margin-top:6px;font-size:13px">Hỗ trợ .pdf và .txt</div>
+        <div id="doc-status" style="margin-top:12px;font-weight:600;color:var(--text)"></div>
+      </div>
+      <input type="file" id="doc-file" accept=".pdf,.txt" style="display:none" onchange="handleDocFile(this.files[0])">
+    `;
+    const dz = document.getElementById('drop-zone');
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+    dz.addEventListener('drop', e => {
+      e.preventDefault(); dz.classList.remove('dragover');
+      if (e.dataTransfer.files[0]) handleDocFile(e.dataTransfer.files[0]);
+    });
+    return;
+  }
+  renderDocPreview();
+}
+
+async function handleDocFile(file) {
+  if (!file) return;
+  const status = document.getElementById('doc-status');
+  const mode = document.getElementById('doc-mode').value;
+  const limit = Math.max(5, Math.min(300, parseInt(document.getElementById('doc-limit').value, 10) || 50));
+  try {
+    status.innerHTML = '<span class="spinner"></span> Đang đọc file...';
+    let text;
+    if (/\.pdf$/i.test(file.name)) {
+      text = await extractPdfText(file);
+    } else {
+      text = await file.text();
+    }
+    status.innerHTML = '<span class="spinner"></span> Đang tách chương và lọc từ vựng...';
+    const rawChapters = splitChapters(text);
+    const chapters = [];
+    for (const ch of rawChapters) {
+      let entries, auto = false;
+      if (mode === 'lines') {
+        entries = extractVocabEntries(ch.lines);
+        /* quá ít dòng từ vựng (chương dạng văn xuôi) -> chuyển sang tự lọc từ */
+        if (entries.length < 3) { entries = autoExtractWords(ch.lines, limit); auto = true; }
+      } else {
+        entries = autoExtractWords(ch.lines, limit);
+        auto = true;
+      }
+      if (entries.length >= 3) {
+        chapters.push({ title: ch.title, entries, auto, include: true });
+      }
+    }
+    if (!chapters.length) {
+      status.textContent = 'Không lọc được từ vựng nào từ file này. Thử đổi cách lọc.';
+      return;
+    }
+    docImport = { fileName: file.name.replace(/\.(pdf|txt)$/i, ''), chapters };
+    render();
+  } catch (err) {
+    status.textContent = '⚠ Lỗi: ' + err.message;
+  }
+}
+
+function renderDocPreview() {
+  const total = docImport.chapters.filter(c => c.include).reduce((s, c) => s + c.entries.length, 0);
+  let html = `
+    <button class="back-link" onclick="docImport=null; render()">← Chọn file khác</button>
+    <h1>Xem trước: ${esc(docImport.fileName)}</h1>
+    <p class="subtitle">Tìm thấy <b>${docImport.chapters.length}</b> chương có từ vựng.
+    Bỏ tick chương không muốn tạo. Mỗi chương sẽ thành một bộ thẻ riêng.</p>
+    <div class="field" style="max-width:420px;margin-bottom:18px">
+      <label>Tên chung cho các bộ thẻ (tiền tố)</label>
+      <input type="text" id="doc-prefix" value="${esc(docImport.fileName.slice(0, 40))}">
+    </div>
+  `;
+  docImport.chapters.forEach((ch, i) => {
+    const preview = ch.entries.slice(0, 6).map(e => esc(e.term)).join(', ');
+    html += `
+      <div class="chapter-box">
+        <div class="chapter-head">
+          <input type="checkbox" id="ch-${i}" ${ch.include ? 'checked' : ''} onchange="docImport.chapters[${i}].include=this.checked; updateDocTotal()">
+          <span class="title">${esc(ch.title)}</span>
+          <span class="count">${ch.entries.length} từ${ch.auto ? ' · tự lọc, cần điền nghĩa' : ''}</span>
+        </div>
+        <div class="chapter-preview">${preview}${ch.entries.length > 6 ? ', ...' : ''}</div>
+      </div>`;
+  });
+  html += `
+    <div class="toolbar" style="margin-top:20px">
+      <button class="btn primary big" onclick="createDecksFromDoc()">Tạo <span id="doc-total">${docImport.chapters.filter(c=>c.include).length}</span> bộ thẻ (${total} từ)</button>
+      <button class="btn ghost big" onclick="docImport=null; go('home')">Huỷ</button>
+    </div>
+  `;
+  app.innerHTML = html;
+}
+
+function updateDocTotal() {
+  const n = docImport.chapters.filter(c => c.include).length;
+  const el = document.getElementById('doc-total');
+  if (el) el.textContent = n;
+}
+
+function createDecksFromDoc() {
+  const prefix = (document.getElementById('doc-prefix').value.trim() || docImport.fileName).slice(0, 40);
+  const selected = docImport.chapters.filter(c => c.include);
+  if (!selected.length) { toast('Hãy chọn ít nhất một chương'); return; }
+  let created = 0;
+  /* unshift theo thứ tự ngược để trên trang chủ các chương hiện đúng thứ tự tài liệu */
+  for (const ch of [...selected].reverse()) {
+    decks.unshift({
+      id: uid(),
+      name: prefix + ' — ' + ch.title,
+      cards: ch.entries.map(e => ({
+        id: uid(),
+        term: e.term,
+        def: e.def || '(tự điền nghĩa — bấm ✏️ để sửa)',
+        known: false,
+      })),
+    });
+    created++;
+  }
+  saveDecks();
+  docImport = null;
+  go('home');
+  toast(`Đã tạo ${created} bộ thẻ từ tài liệu 🎉`);
 }
 
 /* ================= Backup / restore ================= */
