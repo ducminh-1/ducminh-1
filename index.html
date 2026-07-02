@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlashLearn — Học tiếng Anh với Flashcard</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --surface: #1a2233;
+    --surface-2: #232e45;
+    --border: #2e3b57;
+    --text: #eef2f9;
+    --text-dim: #9aa7c0;
+    --primary: #4c6ef5;
+    --primary-hover: #5c7cfa;
+    --green: #37b24d;
+    --red: #f03e3e;
+    --yellow: #f59f00;
+    --radius: 12px;
+    --shadow: 0 8px 24px rgba(0,0,0,.35);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(15,20,32,.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 20px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  header .logo {
+    font-size: 20px; font-weight: 800; cursor: pointer;
+    background: linear-gradient(90deg, #74c0fc, #4c6ef5);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    user-select: none;
+  }
+  header .spacer { flex: 1; }
+  .container { max-width: 860px; margin: 0 auto; padding: 24px 20px 80px; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    border: none; border-radius: 8px; cursor: pointer;
+    font-size: 14px; font-weight: 600; padding: 10px 16px;
+    background: var(--surface-2); color: var(--text);
+    transition: background .15s, transform .1s;
+  }
+  .btn:hover { background: var(--border); }
+  .btn:active { transform: scale(.97); }
+  .btn.primary { background: var(--primary); color: #fff; }
+  .btn.primary:hover { background: var(--primary-hover); }
+  .btn.danger { background: transparent; color: var(--red); border: 1px solid var(--red); }
+  .btn.danger:hover { background: rgba(240,62,62,.12); }
+  .btn.ghost { background: transparent; color: var(--text-dim); }
+  .btn.ghost:hover { color: var(--text); background: var(--surface-2); }
+  .btn.big { padding: 14px 24px; font-size: 16px; border-radius: 10px; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  input[type=text], textarea, select {
+    width: 100%; padding: 11px 14px;
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    font-size: 15px; font-family: inherit;
+    outline: none; transition: border-color .15s;
+  }
+  input[type=text]:focus, textarea:focus { border-color: var(--primary); }
+  textarea { resize: vertical; min-height: 90px; }
+  label { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 6px; font-weight: 600; }
+
+  h1 { font-size: 26px; margin-bottom: 4px; }
+  h2 { font-size: 20px; margin-bottom: 12px; }
+  .subtitle { color: var(--text-dim); font-size: 14px; margin-bottom: 24px; }
+
+  /* ===== Deck list ===== */
+  .deck-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; margin-top: 18px; }
+  .deck-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px; cursor: pointer;
+    transition: transform .15s, border-color .15s;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .deck-card:hover { transform: translateY(-3px); border-color: var(--primary); }
+  .deck-card .name { font-size: 17px; font-weight: 700; word-break: break-word; }
+  .deck-card .meta { font-size: 13px; color: var(--text-dim); }
+  .deck-card .progress-bar { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; margin-top: auto; }
+  .deck-card .progress-bar > div { height: 100%; background: var(--green); border-radius: 3px; }
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--text-dim);
+    border: 2px dashed var(--border); border-radius: var(--radius); margin-top: 18px;
+  }
+  .empty-state .icon { font-size: 44px; margin-bottom: 12px; }
+
+  /* ===== Deck detail ===== */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0; }
+  .card-row {
+    display: flex; gap: 12px; align-items: center;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 16px; margin-bottom: 10px;
+  }
+  .card-row .term { flex: 1; font-weight: 600; word-break: break-word; }
+  .card-row .def { flex: 1.4; color: var(--text-dim); word-break: break-word; border-left: 1px solid var(--border); padding-left: 14px; }
+  .card-row .actions { display: flex; gap: 4px; }
+  .icon-btn {
+    background: none; border: none; cursor: pointer; font-size: 16px;
+    color: var(--text-dim); padding: 6px; border-radius: 6px;
+  }
+  .icon-btn:hover { background: var(--surface-2); color: var(--text); }
+  .badge {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    padding: 3px 8px; border-radius: 20px; margin-right: 6px;
+  }
+  .badge.known { background: rgba(55,178,77,.18); color: #69db7c; }
+  .badge.learning { background: rgba(245,159,0,.18); color: #ffd43b; }
+
+  /* ===== Modal ===== */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 100;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    width: 100%; max-width: 540px; max-height: 90vh; overflow-y: auto;
+    padding: 24px;
+  }
+  .modal h3 { font-size: 18px; margin-bottom: 16px; }
+  .modal .field { margin-bottom: 14px; }
+  .modal .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+  .hint { font-size: 12.5px; color: var(--text-dim); margin-top: 6px; line-height: 1.5; }
+
+  /* ===== Study (flashcards) ===== */
+  .study-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 10px; flex-wrap: wrap; }
+  .study-progress { font-size: 14px; color: var(--text-dim); font-weight: 600; }
+  .flash-scene { perspective: 1200px; margin: 0 auto; max-width: 640px; }
+  .flash-card {
+    position: relative; width: 100%; height: 340px;
+    transform-style: preserve-3d; transition: transform .5s cubic-bezier(.4,.1,.2,1);
+    cursor: pointer;
+  }
+  .flash-card.flipped { transform: rotateX(180deg); }
+  .flash-face {
+    position: absolute; inset: 0; backface-visibility: hidden;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 32px; text-align: center;
+  }
+  .flash-face.back { transform: rotateX(180deg); }
+  .flash-face .side-label {
+    position: absolute; top: 16px; left: 20px;
+    font-size: 12px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--text-dim);
+  }
+  .flash-face .speak-btn { position: absolute; top: 12px; right: 16px; font-size: 20px; }
+  .flash-face .content { font-size: 30px; font-weight: 700; word-break: break-word; max-height: 100%; overflow-y: auto; }
+  .flash-face.back .content { font-size: 24px; font-weight: 600; }
+  .flash-nav { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 22px; flex-wrap: wrap; }
+  .rate-btns { display: flex; justify-content: center; gap: 14px; margin-top: 18px; }
+  .rate-btns .btn { min-width: 150px; }
+  .btn.still { background: rgba(245,159,0,.15); color: #ffd43b; border: 1px solid rgba(245,159,0,.4); }
+  .btn.still:hover { background: rgba(245,159,0,.28); }
+  .btn.got { background: rgba(55,178,77,.15); color: #69db7c; border: 1px solid rgba(55,178,77,.4); }
+  .btn.got:hover { background: rgba(55,178,77,.28); }
+  .kbd-hint { text-align: center; color: var(--text-dim); font-size: 12.5px; margin-top: 18px; }
+  kbd {
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 4px; padding: 1px 6px; font-size: 11.5px; font-family: inherit;
+  }
+
+  /* ===== Quiz ===== */
+  .quiz-question {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 34px 26px; text-align: center;
+    font-size: 24px; font-weight: 700; margin-bottom: 20px; word-break: break-word;
+  }
+  .quiz-question .q-label { display: block; font-size: 13px; font-weight: 600; color: var(--text-dim); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  .quiz-options { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 560px) { .quiz-options { grid-template-columns: 1fr; } .card-row { flex-direction: column; align-items: flex-start; } .card-row .def { border-left: none; padding-left: 0; } }
+  .quiz-option {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px; cursor: pointer; font-size: 15.5px;
+    text-align: left; color: var(--text); font-family: inherit; font-weight: 500;
+    transition: border-color .15s, background .15s; word-break: break-word;
+  }
+  .quiz-option:hover:not(:disabled) { border-color: var(--primary); }
+  .quiz-option.correct { border-color: var(--green); background: rgba(55,178,77,.14); }
+  .quiz-option.wrong { border-color: var(--red); background: rgba(240,62,62,.14); }
+  .quiz-option:disabled { cursor: default; }
+
+  /* ===== Write mode ===== */
+  .write-box { max-width: 560px; margin: 0 auto; }
+  .write-answer-row { display: flex; gap: 10px; margin-top: 16px; }
+  .feedback { margin-top: 14px; padding: 13px 16px; border-radius: 8px; font-size: 15px; font-weight: 600; }
+  .feedback.ok { background: rgba(55,178,77,.14); color: #69db7c; }
+  .feedback.no { background: rgba(240,62,62,.14); color: #ff8787; }
+
+  /* ===== Results ===== */
+  .result-box { text-align: center; padding: 40px 20px; }
+  .result-box .score { font-size: 54px; font-weight: 800; margin: 10px 0; }
+  .result-box .score.good { color: var(--green); }
+  .result-box .score.mid { color: var(--yellow); }
+  .result-box .score.bad { color: var(--red); }
+  .result-actions { display: flex; justify-content: center; gap: 12px; margin-top: 26px; flex-wrap: wrap; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--surface-2); border: 1px solid var(--border);
+    padding: 12px 22px; border-radius: 10px; box-shadow: var(--shadow);
+    font-size: 14px; font-weight: 600; z-index: 200;
+    animation: toast-in .25s ease;
+  }
+  @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+  .back-link { color: var(--text-dim); cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; gap: 5px; margin-bottom: 14px; background: none; border: none; font-family: inherit; }
+  .back-link:hover { color: var(--text); }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo" onclick="go('home')">⚡ FlashLearn</div>
+  <div class="spacer"></div>
+  <button class="btn ghost" onclick="exportData()" title="Sao lưu toàn bộ dữ liệu ra file JSON">⬇ Sao lưu</button>
+  <button class="btn ghost" onclick="document.getElementById('import-file').click()" title="Khôi phục dữ liệu từ file JSON">⬆ Khôi phục</button>
+  <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(this)">
+</header>
+<div class="container" id="app"></div>
+
+<script>
+'use strict';
+
+/* ================= State & storage ================= */
+const STORAGE_KEY = 'flashlearn.decks.v1';
+
+function loadDecks() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) { /* dữ liệu hỏng -> dùng mặc định */ }
+  return null;
+}
+
+function saveDecks() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(decks));
+}
+
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+const SAMPLE_DECK = {
+  id: 'sample',
+  name: 'Từ vựng cơ bản (mẫu)',
+  cards: [
+    { id: 'c1', term: 'hello', def: 'xin chào', known: false },
+    { id: 'c2', term: 'thank you', def: 'cảm ơn', known: false },
+    { id: 'c3', term: 'apple', def: 'quả táo', known: false },
+    { id: 'c4', term: 'book', def: 'quyển sách', known: false },
+    { id: 'c5', term: 'beautiful', def: 'đẹp', known: false },
+    { id: 'c6', term: 'to study', def: 'học', known: false },
+    { id: 'c7', term: 'friend', def: 'bạn bè', known: false },
+    { id: 'c8', term: 'water', def: 'nước', known: false },
+  ],
+};
+
+let decks = loadDecks() || [SAMPLE_DECK];
+
+/* view: {name: 'home' | 'deck' | 'study' | 'quiz' | 'write', deckId, ...sessionState} */
+let view = { name: 'home' };
+
+/* ================= Helpers ================= */
+function esc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function getDeck(id) { return decks.find(d => d.id === id); }
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US';
+  u.rate = 0.92;
+  speechSynthesis.speak(u);
+}
+
+let toastTimer = null;
+function toast(msg) {
+  document.querySelectorAll('.toast').forEach(t => t.remove());
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.remove(), 2200);
+}
+
+function go(name, extra) {
+  view = Object.assign({ name }, extra || {});
+  render();
+  window.scrollTo(0, 0);
+}
+
+/* ================= Render dispatcher ================= */
+const app = document.getElementById('app');
+
+function render() {
+  switch (view.name) {
+    case 'home':  renderHome(); break;
+    case 'deck':  renderDeck(); break;
+    case 'study': renderStudy(); break;
+    case 'quiz':  renderQuiz(); break;
+    case 'write': renderWrite(); break;
+  }
+}
+
+/* ================= Home: deck list ================= */
+function renderHome() {
+  let html = `
+    <h1>Bộ thẻ của bạn</h1>
+    <p class="subtitle">Tạo bộ thẻ, nhập từ vựng và bắt đầu học — giống Quizlet, dữ liệu lưu ngay trên trình duyệt.</p>
+    <button class="btn primary big" onclick="openDeckModal()">＋ Tạo bộ thẻ mới</button>
+  `;
+  if (decks.length === 0) {
+    html += `<div class="empty-state"><div class="icon">🗂️</div>Chưa có bộ thẻ nào.<br>Bấm "Tạo bộ thẻ mới" để bắt đầu!</div>`;
+  } else {
+    html += '<div class="deck-grid">';
+    for (const d of decks) {
+      const known = d.cards.filter(c => c.known).length;
+      const pct = d.cards.length ? Math.round(known / d.cards.length * 100) : 0;
+      html += `
+        <div class="deck-card" onclick="go('deck', {deckId:'${d.id}'})">
+          <div class="name">${esc(d.name)}</div>
+          <div class="meta">${d.cards.length} thẻ · đã thuộc ${known} (${pct}%)</div>
+          <div class="progress-bar"><div style="width:${pct}%"></div></div>
+        </div>`;
+    }
+    html += '</div>';
+  }
+  app.innerHTML = html;
+}
+
+/* ================= Deck detail ================= */
+function renderDeck() {
+  const d = getDeck(view.deckId);
+  if (!d) return go('home');
+  const known = d.cards.filter(c => c.known).length;
+
+  let html = `
+    <button class="back-link" onclick="go('home')">← Tất cả bộ thẻ</button>
+    <h1>${esc(d.name)}</h1>
+    <p class="subtitle">${d.cards.length} thẻ · đã thuộc ${known}</p>
+    <div class="toolbar">
+      <button class="btn primary" onclick="startStudy('${d.id}')" ${d.cards.length ? '' : 'disabled'}>🃏 Học (lật thẻ)</button>
+      <button class="btn" onclick="startQuiz('${d.id}')" ${d.cards.length >= 2 ? '' : 'disabled'}>❓ Trắc nghiệm</button>
+      <button class="btn" onclick="startWrite('${d.id}')" ${d.cards.length ? '' : 'disabled'}>✍️ Gõ đáp án</button>
+    </div>
+    <div class="toolbar">
+      <button class="btn" onclick="openCardModal('${d.id}')">＋ Thêm thẻ</button>
+      <button class="btn" onclick="openImportModal('${d.id}')">📋 Nhập hàng loạt</button>
+      <button class="btn ghost" onclick="resetProgress('${d.id}')" ${known ? '' : 'disabled'}>↺ Đặt lại tiến độ</button>
+      <button class="btn ghost" onclick="openDeckModal('${d.id}')">✏️ Đổi tên</button>
+      <button class="btn danger" onclick="deleteDeck('${d.id}')">🗑 Xoá bộ thẻ</button>
+    </div>
+  `;
+
+  if (d.cards.length === 0) {
+    html += `<div class="empty-state"><div class="icon">📝</div>Bộ thẻ trống. Thêm thẻ thủ công hoặc nhập hàng loạt (dán từ Excel/Google Sheets).</div>`;
+  } else {
+    for (const c of d.cards) {
+      html += `
+        <div class="card-row">
+          <div class="term">
+            <span class="badge ${c.known ? 'known' : 'learning'}">${c.known ? 'Đã thuộc' : 'Đang học'}</span>
+            ${esc(c.term)}
+          </div>
+          <div class="def">${esc(c.def)}</div>
+          <div class="actions">
+            <button class="icon-btn" title="Phát âm" onclick="speak(${JSON.stringify(c.term).replace(/"/g, '&quot;')})">🔊</button>
+            <button class="icon-btn" title="Sửa" onclick="openCardModal('${d.id}','${c.id}')">✏️</button>
+            <button class="icon-btn" title="Xoá" onclick="deleteCard('${d.id}','${c.id}')">🗑</button>
+          </div>
+        </div>`;
+    }
+  }
+  app.innerHTML = html;
+}
+
+/* ================= Deck & card CRUD (modals) ================= */
+function closeModal() {
+  document.querySelectorAll('.modal-overlay').forEach(m => m.remove());
+}
+
+function showModal(innerHtml) {
+  closeModal();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `<div class="modal">${innerHtml}</div>`;
+  overlay.addEventListener('mousedown', e => { if (e.target === overlay) closeModal(); });
+  document.body.appendChild(overlay);
+  const first = overlay.querySelector('input, textarea');
+  if (first) first.focus();
+}
+
+function openDeckModal(deckId) {
+  const d = deckId ? getDeck(deckId) : null;
+  showModal(`
+    <h3>${d ? 'Đổi tên bộ thẻ' : 'Tạo bộ thẻ mới'}</h3>
+    <div class="field">
+      <label>Tên bộ thẻ</label>
+      <input type="text" id="deck-name" value="${d ? esc(d.name) : ''}" placeholder="VD: Từ vựng Unit 5, IELTS Vocabulary...">
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">Huỷ</button>
+      <button class="btn primary" onclick="saveDeck(${d ? `'${d.id}'` : 'null'})">${d ? 'Lưu' : 'Tạo'}</button>
+    </div>
+  `);
+  document.getElementById('deck-name').addEventListener('keydown', e => {
+    if (e.key === 'Enter') saveDeck(d ? d.id : null);
+  });
+}
+
+function saveDeck(deckId) {
+  const name = document.getElementById('deck-name').value.trim();
+  if (!name) { toast('Vui lòng nhập tên bộ thẻ'); return; }
+  if (deckId) {
+    getDeck(deckId).name = name;
+  } else {
+    const d = { id: uid(), name, cards: [] };
+    decks.unshift(d);
+    view = { name: 'deck', deckId: d.id };
+  }
+  saveDecks();
+  closeModal();
+  render();
+}
+
+function deleteDeck(deckId) {
+  const d = getDeck(deckId);
+  if (!confirm(`Xoá bộ thẻ "${d.name}" (${d.cards.length} thẻ)? Hành động này không thể hoàn tác.`)) return;
+  decks = decks.filter(x => x.id !== deckId);
+  saveDecks();
+  toast('Đã xoá bộ thẻ');
+  go('home');
+}
+
+function openCardModal(deckId, cardId) {
+  const d = getDeck(deckId);
+  const c = cardId ? d.cards.find(x => x.id === cardId) : null;
+  showModal(`
+    <h3>${c ? 'Sửa thẻ' : 'Thêm thẻ mới'}</h3>
+    <div class="field">
+      <label>Thuật ngữ (tiếng Anh)</label>
+      <input type="text" id="card-term" value="${c ? esc(c.term) : ''}" placeholder="VD: butterfly">
+    </div>
+    <div class="field">
+      <label>Định nghĩa (nghĩa tiếng Việt)</label>
+      <input type="text" id="card-def" value="${c ? esc(c.def) : ''}" placeholder="VD: con bướm">
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">Huỷ</button>
+      ${c ? '' : '<button class="btn" onclick="saveCard(\'' + deckId + '\', null, true)">Lưu &amp; thêm tiếp</button>'}
+      <button class="btn primary" onclick="saveCard('${deckId}', ${c ? `'${c.id}'` : 'null'}, false)">Lưu</button>
+    </div>
+  `);
+  document.getElementById('card-def').addEventListener('keydown', e => {
+    if (e.key === 'Enter') saveCard(deckId, c ? c.id : null, !c);
+  });
+}
+
+function saveCard(deckId, cardId, addMore) {
+  const term = document.getElementById('card-term').value.trim();
+  const def = document.getElementById('card-def').value.trim();
+  if (!term || !def) { toast('Vui lòng nhập cả thuật ngữ và định nghĩa'); return; }
+  const d = getDeck(deckId);
+  if (cardId) {
+    const c = d.cards.find(x => x.id === cardId);
+    c.term = term; c.def = def;
+  } else {
+    d.cards.push({ id: uid(), term, def, known: false });
+  }
+  saveDecks();
+  if (addMore) {
+    document.getElementById('card-term').value = '';
+    document.getElementById('card-def').value = '';
+    document.getElementById('card-term').focus();
+    toast('Đã thêm: ' + term);
+  } else {
+    closeModal();
+    render();
+  }
+}
+
+function deleteCard(deckId, cardId) {
+  const d = getDeck(deckId);
+  d.cards = d.cards.filter(c => c.id !== cardId);
+  saveDecks();
+  render();
+  toast('Đã xoá thẻ');
+}
+
+function resetProgress(deckId) {
+  const d = getDeck(deckId);
+  d.cards.forEach(c => c.known = false);
+  saveDecks();
+  render();
+  toast('Đã đặt lại tiến độ');
+}
+
+/* ================= Bulk import ================= */
+function openImportModal(deckId) {
+  showModal(`
+    <h3>Nhập thẻ hàng loạt</h3>
+    <div class="field">
+      <label>Dán danh sách (mỗi dòng một thẻ)</label>
+      <textarea id="import-text" rows="9" placeholder="hello - xin chào&#10;apple - quả táo&#10;book, quyển sách"></textarea>
+      <div class="hint">
+        Ngăn cách thuật ngữ và nghĩa bằng <b>Tab</b> (dán từ Excel/Google Sheets),
+        <b>" - "</b> (gạch ngang có khoảng trắng), <b>dấu phẩy</b>, hoặc <b>dấu chấm phẩy</b>.
+        Ưu tiên theo thứ tự đó.
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">Huỷ</button>
+      <button class="btn primary" onclick="doImport('${deckId}')">Nhập</button>
+    </div>
+  `);
+}
+
+function parseImportLine(line) {
+  const seps = ['\t', ' - ', ' – ', ';', ','];
+  for (const sep of seps) {
+    const idx = line.indexOf(sep);
+    if (idx > 0) {
+      const term = line.slice(0, idx).trim();
+      const def = line.slice(idx + sep.length).trim();
+      if (term && def) return { term, def };
+    }
+  }
+  return null;
+}
+
+function doImport(deckId) {
+  const text = document.getElementById('import-text').value;
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const d = getDeck(deckId);
+  let ok = 0, skipped = 0;
+  for (const line of lines) {
+    const parsed = parseImportLine(line);
+    if (parsed) {
+      d.cards.push({ id: uid(), term: parsed.term, def: parsed.def, known: false });
+      ok++;
+    } else {
+      skipped++;
+    }
+  }
+  saveDecks();
+  closeModal();
+  render();
+  toast(`Đã nhập ${ok} thẻ` + (skipped ? `, bỏ qua ${skipped} dòng không hợp lệ` : ''));
+}
+
+/* ================= Study mode (flip cards) ================= */
+function startStudy(deckId) {
+  const d = getDeck(deckId);
+  const pool = d.cards.filter(c => !c.known);
+  const cards = shuffle(pool.length ? pool : d.cards);
+  go('study', { deckId, cards, index: 0, flipped: false, gotIt: 0, again: [] });
+}
+
+function renderStudy() {
+  const d = getDeck(view.deckId);
+  const total = view.cards.length;
+
+  if (view.index >= total) {
+    if (view.again.length) {
+      /* vòng tiếp theo với các thẻ chưa thuộc */
+      view.cards = shuffle(view.again);
+      view.again = [];
+      view.index = 0;
+      view.flipped = false;
+      toast('Vòng ôn lại các thẻ chưa thuộc!');
+    } else {
+      return renderStudyDone();
+    }
+  }
+
+  const c = view.cards[view.index];
+  app.innerHTML = `
+    <div class="study-top">
+      <button class="back-link" style="margin:0" onclick="go('deck',{deckId:'${d.id}'})">← ${esc(d.name)}</button>
+      <span class="study-progress">Thẻ ${view.index + 1} / ${view.cards.length}</span>
+    </div>
+    <div class="flash-scene">
+      <div class="flash-card ${view.flipped ? 'flipped' : ''}" id="flash" onclick="flipCard()">
+        <div class="flash-face front">
+          <span class="side-label">Thuật ngữ</span>
+          <button class="icon-btn speak-btn" onclick="event.stopPropagation(); speak(${JSON.stringify(c.term).replace(/"/g, '&quot;')})">🔊</button>
+          <div class="content">${esc(c.term)}</div>
+        </div>
+        <div class="flash-face back">
+          <span class="side-label">Định nghĩa</span>
+          <div class="content">${esc(c.def)}</div>
+        </div>
+      </div>
+    </div>
+    <div class="rate-btns">
+      <button class="btn big still" onclick="rateCard(false)">🔁 Chưa thuộc</button>
+      <button class="btn big got" onclick="rateCard(true)">✓ Đã thuộc</button>
+    </div>
+    <p class="kbd-hint">
+      <kbd>Space</kbd> lật thẻ &nbsp;·&nbsp; <kbd>←</kbd> chưa thuộc &nbsp;·&nbsp; <kbd>→</kbd> đã thuộc
+    </p>
+  `;
+}
+
+function flipCard() {
+  view.flipped = !view.flipped;
+  const el = document.getElementById('flash');
+  if (el) el.classList.toggle('flipped', view.flipped);
+}
+
+function rateCard(knew) {
+  const c = view.cards[view.index];
+  const real = getDeck(view.deckId).cards.find(x => x.id === c.id);
+  if (knew) {
+    if (real) real.known = true;
+    view.gotIt++;
+  } else {
+    if (real) real.known = false;
+    view.again.push(c);
+  }
+  saveDecks();
+  view.index++;
+  view.flipped = false;
+  render();
+}
+
+function renderStudyDone() {
+  const d = getDeck(view.deckId);
+  const known = d.cards.filter(c => c.known).length;
+  app.innerHTML = `
+    <div class="result-box">
+      <div style="font-size:52px">🎉</div>
+      <h1>Hoàn thành phiên học!</h1>
+      <p class="subtitle" style="margin-top:8px">Bạn đã thuộc <b>${known}/${d.cards.length}</b> thẻ trong bộ "${esc(d.name)}".</p>
+      <div class="result-actions">
+        <button class="btn primary big" onclick="startStudy('${d.id}')">Học lại</button>
+        <button class="btn big" onclick="startQuiz('${d.id}')" ${d.cards.length >= 2 ? '' : 'disabled'}>Làm trắc nghiệm</button>
+        <button class="btn ghost big" onclick="go('deck',{deckId:'${d.id}'})">Về bộ thẻ</button>
+      </div>
+    </div>
+  `;
+}
+
+/* ================= Quiz mode (multiple choice) ================= */
+function startQuiz(deckId) {
+  const d = getDeck(deckId);
+  const cards = shuffle(d.cards);
+  go('quiz', { deckId, cards, index: 0, correct: 0, answered: false });
+}
+
+function renderQuiz() {
+  const d = getDeck(view.deckId);
+  const total = view.cards.length;
+  if (view.index >= total) return renderQuizDone();
+
+  const c = view.cards[view.index];
+  /* Hỏi nghĩa của từ; 3 đáp án nhiễu lấy từ các thẻ khác */
+  const distractors = shuffle(d.cards.filter(x => x.id !== c.id)).slice(0, 3).map(x => x.def);
+  const options = shuffle([c.def, ...distractors]);
+  view.currentOptions = options;
+
+  app.innerHTML = `
+    <div class="study-top">
+      <button class="back-link" style="margin:0" onclick="go('deck',{deckId:'${d.id}'})">← ${esc(d.name)}</button>
+      <span class="study-progress">Câu ${view.index + 1} / ${total} · Đúng: ${view.correct}</span>
+    </div>
+    <div class="quiz-question">
+      <span class="q-label">"${esc(c.term)}" nghĩa là gì?</span>
+      ${esc(c.term)}
+      <button class="icon-btn" style="font-size:20px;vertical-align:middle" onclick="speak(${JSON.stringify(c.term).replace(/"/g, '&quot;')})">🔊</button>
+    </div>
+    <div class="quiz-options">
+      ${options.map((opt, i) => `<button class="quiz-option" id="opt-${i}" onclick="answerQuiz(${i})">${esc(opt)}</button>`).join('')}
+    </div>
+  `;
+}
+
+function answerQuiz(i) {
+  if (view.answered) return;
+  view.answered = true;
+  const c = view.cards[view.index];
+  const chosen = view.currentOptions[i];
+  const isCorrect = chosen === c.def;
+
+  view.currentOptions.forEach((opt, j) => {
+    const btn = document.getElementById('opt-' + j);
+    btn.disabled = true;
+    if (opt === c.def) btn.classList.add('correct');
+    else if (j === i) btn.classList.add('wrong');
+  });
+
+  const real = getDeck(view.deckId).cards.find(x => x.id === c.id);
+  if (isCorrect) {
+    view.correct++;
+  } else if (real) {
+    real.known = false; /* trả lời sai -> cần ôn lại */
+  }
+  saveDecks();
+
+  setTimeout(() => {
+    view.index++;
+    view.answered = false;
+    render();
+  }, isCorrect ? 800 : 1600);
+}
+
+function renderQuizDone() {
+  const d = getDeck(view.deckId);
+  const total = view.cards.length;
+  const pct = Math.round(view.correct / total * 100);
+  const cls = pct >= 80 ? 'good' : pct >= 50 ? 'mid' : 'bad';
+  const msg = pct >= 80 ? 'Xuất sắc! 🌟' : pct >= 50 ? 'Khá tốt, cố thêm chút nữa! 💪' : 'Cần ôn tập thêm nhé! 📚';
+  app.innerHTML = `
+    <div class="result-box">
+      <h1>Kết quả trắc nghiệm</h1>
+      <div class="score ${cls}">${view.correct}/${total}</div>
+      <p class="subtitle">${pct}% — ${msg}</p>
+      <div class="result-actions">
+        <button class="btn primary big" onclick="startQuiz('${d.id}')">Làm lại</button>
+        <button class="btn big" onclick="startStudy('${d.id}')">Học lật thẻ</button>
+        <button class="btn ghost big" onclick="go('deck',{deckId:'${d.id}'})">Về bộ thẻ</button>
+      </div>
+    </div>
+  `;
+}
+
+/* ================= Write mode (type the answer) ================= */
+function startWrite(deckId) {
+  const d = getDeck(deckId);
+  const cards = shuffle(d.cards);
+  go('write', { deckId, cards, index: 0, correct: 0, showingFeedback: false });
+}
+
+function normalizeAnswer(s) {
+  return s.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+function renderWrite() {
+  const d = getDeck(view.deckId);
+  const total = view.cards.length;
+  if (view.index >= total) return renderWriteDone();
+
+  const c = view.cards[view.index];
+  app.innerHTML = `
+    <div class="study-top">
+      <button class="back-link" style="margin:0" onclick="go('deck',{deckId:'${d.id}'})">← ${esc(d.name)}</button>
+      <span class="study-progress">Câu ${view.index + 1} / ${total} · Đúng: ${view.correct}</span>
+    </div>
+    <div class="write-box">
+      <div class="quiz-question">
+        <span class="q-label">Gõ từ tiếng Anh có nghĩa:</span>
+        ${esc(c.def)}
+      </div>
+      <div class="write-answer-row">
+        <input type="text" id="write-input" placeholder="Nhập đáp án tiếng Anh..." autocomplete="off">
+        <button class="btn primary" onclick="checkWrite()">Kiểm tra</button>
+      </div>
+      <div id="write-feedback"></div>
+    </div>
+  `;
+  const input = document.getElementById('write-input');
+  input.focus();
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      if (view.showingFeedback) nextWrite();
+      else checkWrite();
+    }
+  });
+}
+
+function checkWrite() {
+  if (view.showingFeedback) return;
+  const c = view.cards[view.index];
+  const input = document.getElementById('write-input');
+  const answer = normalizeAnswer(input.value);
+  if (!answer) return;
+  const isCorrect = answer === normalizeAnswer(c.term);
+  view.showingFeedback = true;
+  input.disabled = true;
+
+  const real = getDeck(view.deckId).cards.find(x => x.id === c.id);
+  if (isCorrect) {
+    view.correct++;
+  } else if (real) {
+    real.known = false;
+  }
+  saveDecks();
+
+  const fb = document.getElementById('write-feedback');
+  fb.innerHTML = isCorrect
+    ? `<div class="feedback ok">✓ Chính xác! <button class="icon-btn" onclick="speak(${JSON.stringify(c.term).replace(/"/g, '&quot;')})">🔊</button></div>
+       <div style="margin-top:12px;text-align:right"><button class="btn primary" onclick="nextWrite()">Tiếp theo (Enter)</button></div>`
+    : `<div class="feedback no">✗ Chưa đúng. Đáp án: <b>${esc(c.term)}</b> <button class="icon-btn" onclick="speak(${JSON.stringify(c.term).replace(/"/g, '&quot;')})">🔊</button></div>
+       <div style="margin-top:12px;text-align:right"><button class="btn primary" onclick="nextWrite()">Tiếp theo (Enter)</button></div>`;
+  if (isCorrect) speak(c.term);
+}
+
+function nextWrite() {
+  view.index++;
+  view.showingFeedback = false;
+  render();
+}
+
+function renderWriteDone() {
+  const d = getDeck(view.deckId);
+  const total = view.cards.length;
+  const pct = Math.round(view.correct / total * 100);
+  const cls = pct >= 80 ? 'good' : pct >= 50 ? 'mid' : 'bad';
+  app.innerHTML = `
+    <div class="result-box">
+      <h1>Kết quả gõ đáp án</h1>
+      <div class="score ${cls}">${view.correct}/${total}</div>
+      <p class="subtitle">${pct}% chính xác</p>
+      <div class="result-actions">
+        <button class="btn primary big" onclick="startWrite('${d.id}')">Làm lại</button>
+        <button class="btn ghost big" onclick="go('deck',{deckId:'${d.id}'})">Về bộ thẻ</button>
+      </div>
+    </div>
+  `;
+}
+
+/* ================= Backup / restore ================= */
+function exportData() {
+  const blob = new Blob([JSON.stringify(decks, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'flashlearn-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Đã tải file sao lưu');
+}
+
+function importData(inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!Array.isArray(data) || !data.every(d => d.id && d.name && Array.isArray(d.cards))) {
+        throw new Error('bad format');
+      }
+      if (!confirm(`Khôi phục ${data.length} bộ thẻ từ file? Dữ liệu hiện tại sẽ bị thay thế.`)) return;
+      decks = data;
+      saveDecks();
+      go('home');
+      toast('Đã khôi phục dữ liệu');
+    } catch (e) {
+      toast('File không hợp lệ');
+    }
+  };
+  reader.readAsText(file);
+  inputEl.value = '';
+}
+
+/* ================= Keyboard shortcuts (study mode) ================= */
+document.addEventListener('keydown', e => {
+  if (view.name !== 'study') return;
+  if (document.querySelector('.modal-overlay')) return;
+  if (e.key === ' ') { e.preventDefault(); flipCard(); }
+  else if (e.key === 'ArrowRight') rateCard(true);
+  else if (e.key === 'ArrowLeft') rateCard(false);
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
+
+/* ================= Init ================= */
+saveDecks();
+render();
+</script>
+</body>
+</html>
