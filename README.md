@@ -21,26 +21,9 @@ I build and maintain custom Odoo solutions for business customers: custom addons
 - **Database:** PostgreSQL (query optimization, indexing, raw SQL, backup & restore)
 - **DevOps:** Docker, Docker Compose, Linux server & backup management
 
-### 🔭 What I'm working on
-
-- Custom addons for Sales, Accounting, Purchase and Inventory
-- Upgrading custom modules and databases to **Odoo 19/20**
-- Two-way integrations between Odoo and e-commerce, e-invoice and CDP platforms
-
-### 🌱 What I'm learning
-
-- The latest changes in Odoo 19/20: ORM, model registry and OWL
-- Cleaner, more scalable addon architecture
-
 ### 💬 Ask me about
 
 Odoo ORM · custom module development · version migration · Odoo Shell data scripts · API/Webhook integration · queue jobs · Odoo deployment with Docker
-
-### 📫 How to reach me
-
-- Email: [leducminh06042001@gmail.com](mailto:leducminh06042001@gmail.com)
-- Phone: (+84) 385077954
-- Location: Ho Chi Minh City, Vietnam
 
 ### 🚀 Featured projects
 
