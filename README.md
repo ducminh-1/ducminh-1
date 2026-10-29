@@ -1,4 +1,4 @@
-## Hi there 👋 I'm Minh
+## Hi, I'm Minh Le
 
 **Middle-Senior Odoo Developer** based in Ho Chi Minh City, Vietnam 🇻🇳
 
